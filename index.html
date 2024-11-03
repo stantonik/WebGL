@@ -1,14 +1,19 @@
 <!DOCTYPE html>
 <html>
     <header>
+        <link rel="stylesheet" type="text/css" href="style.css">
         <title>WebGL</title>
     </header>
     <body>
         <div>
             <h1>Minecraft WebGL</h1>
 
-            <div>
+            <div id="context-div">
                 <canvas id="context"></canvas>
+            </div>
+            <div>
+                <p>cursor pos = <span id="cursor-pos"></span></p><br>
+                <p>fps = <span id="fps"></span></p>
             </div>
         </div>
 

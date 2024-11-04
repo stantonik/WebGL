@@ -5,15 +5,14 @@
  * @description : script
  */
 
+const gl_canvas = document.getElementById("context");
 const width = 1920.0;
 const height = 1080.0;
 var gl;
 var program;
 
-async function init()
+async function initgl()
 {
-        const gl_canvas = document.getElementById("context");
-
         gl_canvas.height = height;
         gl_canvas.width = width;
 
@@ -21,12 +20,8 @@ async function init()
 
         if (gl === null)
         {
-                console.log("unable to initialize WebGL");
+                console.log("unable to initialize WebGL2");
                 return;
-        }
-        else
-        {
-                console.log("succesfully initialize WebGL");
         }
 
         // Create vertex shader
@@ -77,6 +72,12 @@ async function init()
         const res_loc = gl.getUniformLocation(program, "iResolution");
         gl.uniform2f(res_loc, width, height);
 
+        const sun_rot_loc = gl.getUniformLocation(program, "sun_rot");
+        document.getElementById("sun-rot").addEventListener('input', function(event) 
+                {
+                        gl.uniform1f(sun_rot_loc, parseFloat(event.target.value) * Math.PI / 180.0);
+                });
+
         // Create screen for ray marching
         const screen_vertex = new Float32Array([
                 -1.0, 1.0,
@@ -100,6 +101,7 @@ async function init()
         const line_sample = map_res * 360;
         const radius_array_8_3 = new Uint8Array(3 * line * line_sample);
 
+        console.log("reading mars elevation data...");
         response = await fetch("./mola_radius.txt");
         text = await response.text();
 
@@ -125,8 +127,8 @@ async function init()
 
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8UI, line_sample, line, 0, gl.RGB_INTEGER, gl.UNSIGNED_BYTE, radius_array_8_3);
 
@@ -138,12 +140,20 @@ async function init()
 
         const radius_tex_loc = gl.getUniformLocation(program, "radius_data");
         gl.uniform1i(radius_tex_loc, texture_unit); 
+
+        console.log("ready");
 }
 
-var theta = 0;
 var xpos = 0;
 var ypos = 0;
+var last_xpos = 0;
+var last_ypos = 0;
+var mouse_state = 0;
+var cam_roty = 0.0;
+var cam_rotx = 0.0;
 const fps_span = document.getElementById("fps");
+const slider = document.getElementById('floatSlider');
+
 let start_time;
 let last_time = 0;
 let timer = 0;
@@ -163,10 +173,6 @@ function loop(timestamp)
         const time_loc = gl.getUniformLocation(program, "iTime");
         gl.uniform1f(time_loc , delta_time / 1000.0);
 
-        theta = 0.5;
-        const mouse_loc = gl.getUniformLocation(program, "iMouse");
-        gl.uniform2f(mouse_loc, xpos, ypos);
-
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
         if (timer >= 1000)
@@ -183,19 +189,38 @@ function loop(timestamp)
 
 async function start()
 {
-        await init();
+        await initgl();
 
-        document.getElementById("context").addEventListener("mousemove", function(event)
+        gl_canvas.addEventListener("mousemove", function(event)
                 {
                         var rect = event.target.getBoundingClientRect();
                         let x = Math.floor((event.clientX - rect.left) * (width / rect.width));
                         let y = Math.floor((event.clientY - rect.top) * (height / rect.height));
-                        let _position = `X: ${x}, Y: ${y}`;
                         xpos = x;
                         ypos = y;
+                        if (mouse_state === 1)
+                        {
+                                cam_roty += (xpos - last_xpos) / width * 2.0 * Math.PI;
+                                cam_rotx += (ypos - last_ypos) / height * 2.0 * Math.PI;
+                                const cam_rot_loc = gl.getUniformLocation(program, "cam_rot");
+                                gl.uniform2f(cam_rot_loc, cam_rotx, cam_roty);
+                                last_xpos = xpos;
+                                last_ypos = ypos;
+                        }
 
-                        document.getElementById("cursor-pos").innerHTML = _position;
+                        last_xpos = xpos;
+                        last_ypos = ypos;
                 })
+
+        gl_canvas.addEventListener("mousedown", function()
+                {
+                        mouse_state = 1;
+                });
+
+        gl_canvas.addEventListener("mouseup", function()
+                {
+                        mouse_state = 0;
+                });
 
         requestAnimationFrame(loop);
 }
